@@ -42,19 +42,42 @@ def obtener_estado_interfaces():
     except requests.exceptions.RequestException as e:
         print(f"Error al obtener estado de interfaces: {e}")
         return []
+def seleccionar_interfaz():
+    tipos = {
+        "1": "softwareLoopback",
+        "2": "ethernetCsmacd",  # para GigabitEthernet/FastEthernet
+    }
 
-def configurar_loopback(nombre, descripcion, ip, mascara):
-    """Configura una nueva interfaz Loopback y devuelve True si tiene éxito, False si falla."""
+    print("Selecciona el tipo de interfaz:")
+    print("1. Loopback")
+    print("2. Ethernet (GigabitEthernet/FastEthernet)")
+
+    opcion = input("Opción: ").strip()
+    tipo_iana = tipos.get(opcion)
+    
+    if not tipo_iana:
+        print("Tipo no válido.")
+        return None, None, None
+
+    prefijo = "Loopback" if opcion == "1" else input("Prefijo de interfaz (ej: GigabitEthernet, FastEthernet): ").strip()
+    numero = input("Número de interfaz (ej: 0, 0/0): ").strip()
+    nombre = f"{prefijo}{numero}"
+
+    return nombre, tipo_iana, prefijo
+    
+def configurar_interfaz(nombre, tipo_iana, descripcion, ip, mascara):
+    """Configura una interfaz genérica por RESTCONF"""
     url = f"https://{ROUTER_IP}:{RESTCONF_PORT}/restconf/data/ietf-interfaces:interfaces"
     headers = {
         "Accept": "application/yang-data+json",
         "Content-Type": "application/yang-data+json"
     }
+
     payload = {
         "ietf-interfaces:interface": {
             "name": nombre,
             "description": descripcion,
-            "type": "iana-if-type:softwareLoopback",
+            "type": f"iana-if-type:{tipo_iana}",
             "enabled": True,
             "ietf-ip:ipv4": {
                 "address": [
@@ -66,37 +89,36 @@ def configurar_loopback(nombre, descripcion, ip, mascara):
             }
         }
     }
+
     try:
         response = requests.post(
             url, headers=headers, auth=HTTPBasicAuth(ROUTER_USERNAME, ROUTER_PASSWORD),
             data=json.dumps(payload), verify=False, timeout=10
         )
         if response.status_code == 201:
-            print(f"Interfaz Loopback '{nombre}' creada exitosamente.")
+            print(f"Interfaz '{nombre}' creada exitosamente.")
             return True
         else:
-            print(f"Respuesta inesperada al crear loopback: {response.status_code} - {response.text}")
-            response.raise_for_status()
+            print(f"Error al crear interfaz: {response.status_code} - {response.text}")
             return False
     except requests.exceptions.RequestException as e:
-        print(f"Error al configurar la interfaz Loopback: {e}")
+        print(f"Error de conexión: {e}")
         return False
-
-def eliminar_loopback(nombre):
-    """Elimina una interfaz Loopback y devuelve True si tiene éxito, False si falla."""
+def eliminar_interfaz():
+    nombre = input("Nombre de la interfaz a eliminar (ej: Loopback1, GigabitEthernet0/0): ").strip()
     url = f"https://{ROUTER_IP}:{RESTCONF_PORT}/restconf/data/ietf-interfaces:interfaces/interface={nombre}"
     headers = {"Accept": "application/yang-data+json"}
+
     try:
         response = requests.delete(
             url, headers=headers, auth=HTTPBasicAuth(ROUTER_USERNAME, ROUTER_PASSWORD), verify=False, timeout=10
         )
         if response.status_code == 204:
-            print(f"Interfaz Loopback '{nombre}' eliminada exitosamente.")
+            print(f"Interfaz '{nombre}' eliminada exitosamente.")
             return True
         else:
-            print(f"Respuesta inesperada al eliminar loopback: {response.status_code} - {response.text}")
-            response.raise_for_status()
+            print(f"Error al eliminar: {response.status_code} - {response.text}")
             return False
     except requests.exceptions.RequestException as e:
-        print(f"Error al eliminar la interfaz Loopback: {e}")
+        print(f"Error de conexión: {e}")
         return False
